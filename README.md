@@ -1,217 +1,189 @@
-# YouTube-Agent.bundle: Plex Movie & TV Series library agent
+# YouTube-Agent.bundle: Plex TV Series & Movie metadata agent
 
-This is a Metadata Agent for downloaded YouTube videos. It works by looking up
-metadata on YouTube using the YouTube video id. It is important to have this id
-in the filename, otherwise this agent can't do the lookup.
-This plugin also supports looking up metadata from `.info.json` files,
-see `--write-info-json` usage below.
+A metadata agent for Plex that fetches titles, summaries, thumbnails, and other
+metadata for downloaded YouTube videos by looking up the YouTube video ID embedded
+in the filename.
 
-This supports the following formats in file or folder names:
-- `[xxxxxxxx]`
-- `[youtube-xxx]`
-- `[YouTube-xxx]`
-- `[Youtube-xxx]`
+> **This is a fork of [ZeroQI/YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle)**
+> with fixes for newer versions of Plex Media Server. See [Changes from upstream](#changes-from-upstream).
 
-This will find the YouTube id in names, like for example:
-- `Person Of Interest  Soundtrack - John Reese Themes (Compilation) [OR5EnqdnwK0].mp4`
+---
 
-When using this Plugin, please respect YouTube Terms and conditions: https://www.youtube.com/t/terms
+## Requirements
 
-Installation
-============
+- [Absolute Series Scanner](https://github.com/ZeroQI/Absolute-Series-Scanner) — required to scan TV Series libraries
+- A [YouTube Data API key](#youtube-api-key) — strongly recommended (the built-in key is shared and will hit quota limits)
+- A [Plex token](#plex-token) — required for episode titles to work correctly on newer Plex versions
 
-The plugin code needs to be put into `Plex Media Server/Plug-ins` folder:
-- https://support.plex.tv/articles/201187656-how-do-i-manually-install-a-plugin/
+---
 
-Here is how to find the Plug-in folder location:
-- https://support.plex.tv/articles/201106098-how-do-i-find-the-plug-ins-folder/
+## Installation
 
-Plex main folder location could be one of:
+1. Download this repo as a zip and unpack it, or clone it
+2. Rename the folder to `YouTube-Agent.bundle` (no `-master` suffix)
+3. Place it in your Plex `Plug-ins` folder:
 
-    * '%LOCALAPPDATA%\Plex Media Server\'                                        # Windows Vista/7/8
-    * '%USERPROFILE%\Local Settings\Application Data\Plex Media Server\'         # Windows XP, 2003, Home Server
-    * '$HOME/Library/Application Support/Plex Media Server/'                     # Mac OS
-    * '$PLEX_HOME/Library/Application Support/Plex Media Server/',               # Linux
-    * '/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/', # Debian,Fedora,CentOS,Ubuntu
-    * '/usr/local/plexdata/Plex Media Server/',                                  # FreeBSD
-    * '/usr/pbi/plexmediaserver-amd64/plexdata/Plex Media Server/',              # FreeNAS
-    * '${JAIL_ROOT}/var/db/plexdata/Plex Media Server/',                         # FreeNAS
-    * '/c/.plex/Library/Application Support/Plex Media Server/',                 # ReadyNAS
-    * '/share/MD0_DATA/.qpkg/PlexMediaServer/Library/Plex Media Server/',        # QNAP
-    * '/volume1/Plex/Library/Application Support/Plex Media Server/',            # Synology, Asustor
-    * '/raid0/data/module/Plex/sys/Plex Media Server/',                          # Thecus
-    * '/raid0/data/PLEX_CONFIG/Plex Media Server/'                               # Thecus Plex community
+| Platform | Path |
+|---|---|
+| Windows Vista/7/8 | `%LOCALAPPDATA%\Plex Media Server\Plug-ins\` |
+| Windows XP | `%USERPROFILE%\Local Settings\Application Data\Plex Media Server\Plug-ins\` |
+| macOS | `$HOME/Library/Application Support/Plex Media Server/Plug-ins/` |
+| Linux (Debian/Ubuntu/Fedora) | `/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/Plug-ins/` |
+| Synology/Asustor | `/volume1/Plex/Library/Application Support/Plex Media Server/Plug-ins/` |
+| QNAP | `/share/MD0_DATA/.qpkg/PlexMediaServer/Library/Plex Media Server/Plug-ins/` |
 
-To obtain the code:
-1. Download the Zip file: https://github.com/ZeroQI/YouTube-Agent.bundle/archive/refs/heads/master.zip
-1. Unpack the downloaded Zip and rename the contents as `Youtube-Agent.bundle` (remove `-master`)
-1. Place it inside `Plug-ins` folder
-1. Restart Plex Media Server to make sure that the new plugin will be loaded.
-1. [Create your own YouTube API token](#youtube-api-key) (recommended)
+4. Restart Plex Media Server
+5. Set up your [YouTube API key](#youtube-api-key)
+6. Set up your [Plex token](#plex-token)
 
-To enable for Library:
-1. Create a new (or update an existing) library
-2. Choose `Manage Library` -> `Edit`
-3. Click on the `Advanced` tab and select Agent: `YoutubeMovie` or `YouTubeSeries` depending on library type
+### Enable for a library
 
-Repeat this for all libraries you wish to use this agent.
+1. Open the library in Plex → **Manage Library** → **Edit** → **Advanced** tab
+2. Set Agent to **YouTubeSeries** (for TV libraries) or **YoutubeMovie** (for movie libraries)
 
-Usage
-=====
+---
 
-To download a playlist:
-1. Take video link: https://www.youtube.com/watch?v=f-wWBGo6a2w&list=PL22J3VaeABQD_IZs7y60I3lUrrFTzkpat
-1. Click on top right on playlist name or remove `v=video_id` from URL: https://www.youtube.com/watch?list=PL22J3VaeABQD_IZs7y60I3lUrrFTzkpat
-1. Run `youtube-dl` command: `youtube-dl https://www.youtube.com/watch?list=PL22J3VaeABQD_IZs7y60I3lUrrFTzkpat`
+## Naming your files
 
-Additionally, you may want to use:
+The agent finds metadata by extracting the YouTube video ID from the filename or folder name. The ID must appear in square brackets.
 
-1. `--restrict-filenames`:
-   Necessary, when storing media files on Windows filesystem.
-   Restrict filenames to only ASCII characters, and avoid "&" and
-   spaces in filenames, makes the filenames slightly messy but no crash due to
-   unsupported character.
-1. `--write-info-json`:
-   The agent will load metadata from the local file if exists.
-   This can reduce YouTube API request rate if metadata is obtained from local `.info.json` files.
+**Supported formats:**
+- `[xxxxxxxxxxx]` — bare video ID
+- `[youtube-xxxxxxxxxxx]`
 
-A `My_Plex_Pass` user script from
-[forums.plex.com](https://forums.plex.tv/t/rel-youtube-metadata-agent/44574/184)
-for both channels and playlists in format `channel name [chanid]\video title [videoid].ext`:
-- `youtube-dl -v --dateafter 20081004 --download-archive /volume1/Youtube/.Downloaded -i -o "/volume1/Youtube/%(uploader)s [%(channel_id)s]/%(playlist_index)s - %(title)s [%(id)s].%(ext)s" -f bestvideo+bestaudio -ci --batch-file=/volume1/Youtube/Channels_to_DL.txt`
-- Example files: `Youtube\Errant Signal [UCm4JnxTxtvItQecKUc4zRhQ]\001 - Thanksgiving Leftovers - Battlefield V [Qgdr8xdqGDE]`
+**Example filename:**
+```
+Person Of Interest Soundtrack [OR5EnqdnwK0].mp4
+```
 
-YouTube IDs
-- Playlist id: PL and 16 hexadecimal characters 0-9 and A-F or 32 chars 0-9 a-Z _ - (Example: https://www.youtube.com/watch?v=aCl4SD7SkLE&list=PLMBYlcH3smRxxcXT7G-HHAj5czGS0sZsB)
-- Channel id: PL and 32 hexadecimal characters 0-9 and A-F or 32 chars 0-9 a-Z _ - (Example: (https://www.youtube.com/channel/UCYzPXprvl5Y-Sf0g4vX-m6g)
-- Video id: 11 chars long 0-9 a-Z _ -
+### TV Series library layout
 
-Requirements
-- Do create your own YouTube API key and replace in [Absolute Series Scanner] (ASS) code and agent settings
-- Please use the Absolute Series Scanner to scan your media and leave the YouTube id in the series/movie title
-- leave the YouTube video ID on every file
-- Playlist (preferred) id OR Channel id on series folder name (as `Search()` need to assign an id to the series)
+Series folders must include a YouTube **channel ID** (`UC...`) or **playlist ID** (`PL...`) in the folder name, or in a `youtube.id` file inside the folder.
 
-Naming convention for Movie/Home Video library:
-- filename without extension named exactly the same as the YouTube video
-- filename with youtube video id `[xxxxxxxxxx]` or `[youtube-xxxxxxxxxx]`
+**Finding your channel ID:** YouTube channel URLs like `youtube.com/@channelname` are human-readable handles, not IDs. To find the actual ID:
+1. Open the channel page in a browser
+2. View page source (Ctrl+U) and search for `"channelId"` — you'll find something like `"channelId":"UCdQWs2nw6w77Rw0t-37a4OA"`
 
-Naming convention for TV Series library:
-- movies have to be put in identically named folder named exactly the same as the YouTube video or have YouTube video id
-- series folder name with YouTube playlist id `[PLxxxxxxxxxxxxxxxx]` in title or inside a `youtube.id` file at its root
-- series folder name with YouTube channel id `[UCxxxxxxxxxxxxxxxx]` in title or inside a `youtube.id` file at its root
+**Folder structure:**
+```
+Channel Name [UCdQWs2nw6w77Rw0t-37a4OA]/
+  Season 2024/
+    Video Title [videoId11char].mkv
+    Video Title [videoId11char].mkv
+  Season 2025/
+    Video Title [videoId11char].mkv
+```
 
-Notes:
-- The Absolute Series Scanner will support `youtube.id` file in series folder and pass it to the agent through the series title
-- [!] register your own API key and also replace `API_KEY='AIzaSyC2q8yjciNdlYRNdvwbb7NEcDxBkv1Cass'` in `Absolute Series Scanner` codebase and the agent setting `[Agent_youtube_api_key]` OR you will deplete the quota of requests in MY account and metadata will stop for ALL users using default settings.
-- You can use grouping folders and a collection field will be created. If the logs complain about `INFO (__init__:527) - Place correct Plex token in X-Plex-Token.id file in logs folder or in PLEX_LIBRARY_URL variable to have a log per library - https://support.plex.tv/hc/en-us/articles/204059436-Finding-your-account-token-X-Plex-Token`, then create a `Plex Media Server/X-Plex-Token.id` containing the Plex token id by logging on https://app.plex.tv/desktop, then visit https://plex.tv/devices.xml, and find `<MediaContainer><Device ... token="xxxxxxxxxxxxxx">` value.
-
-Movie Library Fields supported:
-- `title`
-- `summary`
-- `poster`
-- `rating`
-- `originally_available_at`
-- `year`
-- `genres` (many? to test)
-- `directors` (1)
-
-Example
-=======
-
-This shows example file layout:
-
+Optional grouping subfolders (e.g. by series/playlist) are supported — they will appear as collections in Plex:
 ```
 CaRtOoNz [UCdQWs2nw6w77Rw0t-37a4OA]/
-- Ben and Ed/
-  - Ben and Ed _ 'My Zombie Best Friend!' (I Didn't Need Those Legs Anyway!) [fRFr7L_qgEo].mkv
-  - Ben and Ed _ 'Clownin Around!' (F_ck You Neck-Beard!) [Nh9eILgD5N4].mkv
-- Golf With Your Friends/
-  - Golf With Friends _ HOLE IN ONE...THOUSAND! (w_ H2O Delirious, Bryce, & Ohmwrecker) [81er8CP24h8].mkv
-  - Golf With Friends _ GOLF LIKE AN EGYPTIAN! (w_ H2O Delirious, Bryce, & Ohmwrecker) [gKYid-SjDiE].mkv
-
-H2ODelirious [UCClNRixXlagwAd--5MwJKCw]/
-- Ben and Ed/
-  - Ben And Ed Ep.1 (MUST SAVE BEN) BRAINNNNNSSSS [9YeXl28l9Yg].mkv
-  - Ben And Ed - Blood Party - ANGRYLIRIOUS!!!!! (I CAN DO THIS!) [BEDE2z3G3hY].mkv
-- Golf With Your Friends/
-  - Golf With Your Friends - 1st Time Playing! 'Professionals' [wxS52xI_W_Y].mkv
-  - Golf With Your Friends - Hitting Balls, Stroking Out! [GdLon0CCEXE].mkv
+  Ben and Ed/
+    Ben and Ed - Episode Title [fRFr7L_qgEo].mkv
+  Golf With Your Friends/
+    Golf With Friends - Episode Title [81er8CP24h8].mkv
 ```
 
-History
-=======
+### Movie library layout
 
-Forked initially from [@paulds8] and [@sander1]'s `YouTube-Agent.bundle` movie-only agent:
+```
+Video Title [videoId11char].mp4
+```
+or with youtube prefix:
+```
+Video Title [youtube-videoId11char].mp4
+```
 
-[@sander1] did the initial movie only agent using a given YouTube video id:
-- https://github.com/sander1/YouTube-Agent.bundle
-- https://forums.plex.tv/discussion/83106/rel-youtube-metadata-agent
+---
 
-[@paulds8] did the initial title search fork that [@ZeroQI] had to fix:
-- https://github.com/paulds8/YouTube-Agent.bundle/tree/namematch
-- https://forums.plex.tv/discussion/300800/youtube-agent-matching-on-name
+## YouTube API key
 
-Made it into a series agent straight away...
+The agent ships with a built-in API key, but it is shared across all users of the default configuration — if quota runs out, metadata stops working for everyone. You should register your own key.
 
-[@paulds8]: https://github.com/paulds8
-[@sander1]: https://github.com/sander1
-[@ZeroQI]: https://github.com/ZeroQI
+1. Go to [Google Developer Console](https://console.developers.google.com/)
+2. Create or select a project
+3. Follow the [registering an application](https://developers.google.com/youtube/registering_an_application) instructions to create an API key
+4. [Enable the YouTube Data API](https://console.cloud.google.com/apis/library/youtube.googleapis.com) for the project
+5. Create a file named `youtube-key.txt` in the plugin directory and paste your API key into it
 
-YouTube API key
-===============
+The plugin directory is inside your `Plug-ins` folder: `YouTube-Agent.bundle/`
 
-To avoid depleting usage quota of the built-in API key, you should register
-your own YouTube API key and configure this plugin to use it.
+---
 
-When quota has reached, all users (including you) using default API key will
-have metadata requests blocked.
+## Plex token
 
-The setup is moderately complicated:
-1. Go to [Google Developer Console].
-1. From the top bar choose or create a new project
-1. Follow "API keys" instructions from [registering an application]
-1. Skip the API restrictions part
-1. [Enable YouTube Data API] for the project
-1. Copy the API key from "API key created" dialog
-1. Place the value to `youtube-key.txt` file in the plugin directory
-1. If you need to obtain the API key any time later, visit [credentials] page
+Newer versions of Plex no longer write agent-provided episode titles back to the
+database automatically. This agent works around that by calling the Plex API
+directly — but it needs your Plex token to do so. Without it, episode titles will
+show as the raw filename instead of the YouTube video title.
 
-[Google Developer Console]: https://console.developers.google.com/
-[registering an application]: https://developers.google.com/youtube/registering_an_application
-[credentials]: https://console.cloud.google.com/apis/credentials
-[Enable YouTube Data API]: https://console.cloud.google.com/apis/library/youtube.googleapis.com
+The token also enables per-library log files, which is useful for troubleshooting.
 
-Troubleshooting:
-================
-If you ask for something already answered in the readme, or post scanner issues on the agent page or vice-versa, please donate (will be refered to as the RTFM tax)
+### How to set it up
 
-If files and series are showing in Plex GUI with the right season, the scanner did its job
-If you miss metadata (serie title wrong, no posters, summary, wrong episode title or summaries, ep screenshot, etc...), that is the Agent doing.
+1. Find your Plex token:
+   - Log into Plex Web in your browser
+   - Open any media item → **...** menu → **Get Info** → **View XML**
+   - The URL that opens will contain `X-Plex-Token=xxxxxxxxxxxx` — copy that value
+2. Create a file named `X-Plex-Token.id` in your Plex root folder (the same folder that contains `Plug-ins/`) and paste just the token value into it — no newline, no quotes
 
-To avoid already solved issues, and make sure you do include all relevant logs in one go, please do the following:
-- Update to the latest Absolute Series Scanner, Youtube-Agent
-- deleting all Plex logs leaving folders intact
-- restart Plex
-- Update the series Metadata
-- including all the following logs: (location: https://support.plex.tv/hc/en-us/articles/200250417-Plex-Media-Server-Log-Files)
-   - [...]/Plex Media Server/Logs/PMS Plugin Logs/com.plexapp.agents.Youtube-Agent.log (Agent logs)
-   - [...]/Plex Media Server/Logs/PMS Plugin Logs/com.plexapp.system.log (show why the agent cannot launch)
-   - Screen capture to illustrate if needed. Above logs are still mandatory
+**Example locations for `X-Plex-Token.id`:**
+- Linux: `/var/lib/plexmediaserver/Library/Application Support/Plex Media Server/X-Plex-Token.id`
+- macOS: `$HOME/Library/Application Support/Plex Media Server/X-Plex-Token.id`
 
-Support thread for agent:
-- https://github.com/ZeroQI/YouTube-Agent.bundle/issues (proven or confident enough it's a bug. Include the symptoms, the logs mentionned above)
-- https://forums.plex.tv/discussion/83106/rel-youtube-metadata-agent/p5 (not sure if bug, if bug will create a gihub issue ticket)
+This is not a standard Plex configuration file — it is specific to this agent (and the HAMA agent).
 
-Donation
-========
+---
 
-You can choose either:
+## Downloading videos
 
-1. Pay link: https://PayPal.Me/ZeroQI
-1. Donate link: A [PayPal] payment, but marked as donation.
-   Having money sent as donation you could be eligible for tax return depending
-   on the country you pay taxes for.
+Use [yt-dlp](https://github.com/yt-dlp/yt-dlp) (recommended, actively maintained fork of youtube-dl):
 
-[PayPal]: https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=S8CUKCX4CWBBG&lc=IE&item_name=Plex%20movies%20and%20TV%20series%20Youtube%20Agent&currency_code=EUR&bn=PP%2dDonationsBF%3abtn_donate_SM%2egif%3aNonHosted
-[Absolute Series Scanner]: https://github.com/ZeroQI/Absolute-Series-Scanner
+```
+yt-dlp -o "%(uploader)s [%(channel_id)s]/%(upload_date>%Y)s/[%(upload_date)s] - %(title)s [%(id)s].%(ext)s" https://www.youtube.com/@channelname
+```
+
+This produces a layout compatible with this agent, with season folders by year.
+
+Useful flags:
+- `--write-info-json` — saves metadata locally; the agent will use this instead of the API, reducing API quota usage
+- `--restrict-filenames` — use on Windows to avoid unsupported characters in filenames
+
+---
+
+## Changes from upstream
+
+This fork fixes two bugs that affect **Plex Media Server 1.40+**:
+
+### Episode titles show as filename instead of YouTube title
+
+Newer Plex versions no longer apply legacy agent metadata back to the database after an agent run. The agent correctly fetches titles from the YouTube API and writes them to its metadata bundle, but Plex never reads them back into the database.
+
+**Fix:** After fetching each episode title from YouTube, the agent now calls the Plex API directly (`PUT /library/metadata/{id}`) to update the title in the database. This requires the [Plex token](#plex-token) to be configured.
+
+### Series title shows as "Season XXXX" instead of channel name
+
+When using channel ID mode, the series title was being set from the wrong path component — the season folder (e.g. `Season 2025`) instead of the series root folder (e.g. `dangthatsalongname`). This was caused by the same Plex API access issue: without a valid token, the agent could not determine the library root path and fell back to incorrect values.
+
+**Fix:** The agent now uses the correctly resolved series root folder name (derived from the Plex library API) for the series title.
+
+---
+
+## Troubleshooting
+
+**Episode titles are filenames** — Set up the [Plex token](#plex-token).
+
+**Series title is wrong (shows season folder name)** — Set up the [Plex token](#plex-token).
+
+**No metadata at all** — Check your [YouTube API key](#youtube-api-key). The default key may have hit its quota limit.
+
+**Files not showing up after scan** — This agent handles metadata only. If files aren't appearing, the issue is with Absolute Series Scanner, not this agent. Check scanner logs at:
+`Plex Media Server/Logs/ASS Scanner Logs/`
+
+**Metadata not updating after Refresh** — Check agent logs at:
+`Plex Media Server/Logs/PMS Plugin Logs/com.plexapp.agents.youtube.log`
+
+---
+
+## History
+
+Forked from [@ZeroQI](https://github.com/ZeroQI)'s [YouTube-Agent.bundle](https://github.com/ZeroQI/YouTube-Agent.bundle), which was itself forked from [@paulds8](https://github.com/paulds8) and [@sander1](https://github.com/sander1)'s earlier movie-only agents.
