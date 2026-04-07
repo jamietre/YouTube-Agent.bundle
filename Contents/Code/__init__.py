@@ -366,6 +366,8 @@ def Update(metadata, media, lang, force, movie):
     ### Collection tag for grouping folders ###
     library, root, path = GetLibraryRootPath(dir)
     series_root_folder=''
+    section_id         = PLEX_SECTION_FOR_PATH.get(root, '')
+    file_rating_key    = plex_build_file_rating_key_map(section_id)
     Log.Info(u'[ ] library:    "{}"'.format(library))
     Log.Info(u'[ ] root:       "{}"'.format(root   ))
     Log.Info(u'[ ] path:       "{}"'.format(path   ))
@@ -437,7 +439,7 @@ def Update(metadata, media, lang, force, movie):
       else:
         
         if not title:
-          title          = re.sub( "\s*\[.*?\]\s*"," ",series_folder)  #instead of path use series foldername
+          title          = re.sub( "\s*\[.*?\]\s*"," ", os.path.basename(series_root_folder) if series_root_folder else series_folder).strip()
           metadata.title = title
         Log.Info('[ ] title:        "{}", metadata.title: "{}"'.format(title, metadata.title))
         if not Dict(json_playlist_details, 'snippet', 'description'):
@@ -527,9 +529,9 @@ def Update(metadata, media, lang, force, movie):
           #if not Dict(json_playlist_details, 'snippet', 'publishedAt'):  metadata.originally_available_at = Datetime.ParseDate(Dict(json_channel_items, 'snippet', 'publishedAt')).date();  Log.Info('[ ] publishedAt:  {}'.format(Dict(json_channel_items, 'snippet', 'publishedAt' )))
            
     #NOT PLAYLIST NOR CHANNEL GUID
-    else:  
+    else:
       Log.Info('No GUID so random folder')
-      metadata.title = series_folder  #instead of path use series foldername
+      metadata.title = re.sub("\s*\[.*?\]\s*"," ", os.path.basename(series_root_folder) if series_root_folder else series_folder).strip()
  
     ### Season + Episode loop ###
     genre_array = {}
@@ -551,6 +553,7 @@ def Update(metadata, media, lang, force, movie):
           videoId = Dict(video, 'id', 'videoId') or Dict(video, 'snippet', 'resourceId', 'videoId')
           if videoId and videoId in filename:
             episode.title                   = sanitize_path(Dict(video, 'snippet', 'title'       ));                                                                  Log.Info(u'[ ] title:        {}'.format(Dict(video, 'snippet', 'title'       )))
+            plex_set_episode_title(file_rating_key.get(media.seasons[s].episodes[e].items[0].parts[0].file, ''), episode.title)
             episode.summary                 = sanitize_path(Dict(video, 'snippet', 'description' ));                                                                  Log.Info(u'[ ] description:  {}'.format(Dict(video, 'snippet', 'description' ).replace('\n', '. ')))
             episode.originally_available_at = Datetime.ParseDate(Dict(video, 'contentDetails', 'videoPublishedAt') or Dict(video, 'snippet', 'publishedAt')).date();  Log.Info('[ ] publishedAt:  {}'.format(Dict(video, 'contentDetails', 'videoPublishedAt' )))
             thumb                           = Dict(video, 'snippet', 'thumbnails', 'maxres', 'url') or Dict(video, 'snippet', 'thumbnails', 'medium', 'url')or Dict(video, 'snippet', 'thumbnails', 'standard', 'url') or Dict(video, 'snippet', 'thumbnails', 'high', 'url') or Dict(video, 'snippet', 'thumbnails', 'default', 'url')
@@ -615,6 +618,7 @@ def Update(metadata, media, lang, force, movie):
                 Log.Info('[?] link:     "https://www.youtube.com/watch?v={}"'.format(videoId))
                 thumb                           = Dict(json_video_details, 'snippet', 'thumbnails', 'maxres', 'url') or Dict(json_video_details, 'snippet', 'thumbnails', 'medium', 'url') or Dict(json_video_details, 'snippet', 'thumbnails', 'standard', 'url') or Dict(json_video_details, 'snippet', 'thumbnails', 'high', 'url') or Dict(json_video_details, 'snippet', 'thumbnails', 'default', 'url')
                 episode.title                   = sanitize_path(json_video_details['snippet']['title']);                                 Log.Info('[ ] title:    "{}"'.format(json_video_details['snippet']['title']))
+                plex_set_episode_title(file_rating_key.get(media.seasons[s].episodes[e].items[0].parts[0].file, ''), episode.title)
                 episode.summary                 = sanitize_path(json_video_details['snippet']['description']);                           Log.Info('[ ] summary:  "{}"'.format(json_video_details['snippet']['description'].replace('\n', '. ')))
                 if len(e)>3:  episode.originally_available_at = Datetime.ParseDate(json_video_details['snippet']['publishedAt']).date();                       Log.Info('[ ] date:     "{}"'.format(json_video_details['snippet']['publishedAt']))
                 episode.duration                = ISO8601DurationToSeconds(json_video_details['contentDetails']['duration'])*1000;               Log.Info('[ ] duration: "{}"->"{}"'.format(json_video_details['contentDetails']['duration'], episode.duration))
@@ -656,6 +660,7 @@ PluginDir                = os.path.abspath(os.path.join(os.path.dirname(inspect.
 PlexRoot                 = os.path.abspath(os.path.join(PluginDir, "..", ".."))
 CachePath                = os.path.join(PlexRoot, "Plug-in Support", "Data", "com.plexapp.agents.hama", "DataItems")
 PLEX_LIBRARY             = {}
+PLEX_SECTION_FOR_PATH    = {}  # path -> section key (int)
 PLEX_LIBRARY_URL         = "http://127.0.0.1:32400/library/sections/"    # Allow to get the library name to get a log per library https://support.plex.tv/hc/en-us/articles/204059436-Finding-your-account-token-X-Plex-Token
 YOUTUBE_API_BASE_URL     = "https://www.googleapis.com/youtube/v3/"
 YOUTUBE_CHANNEL_ITEMS    = YOUTUBE_API_BASE_URL + 'search?order=date&part=snippet&type=video&maxResults=50&channelId={}&key={}'
@@ -673,18 +678,55 @@ YOUTUBE_CATEGORY_ID      = {  '1': 'Film & Animation',  '2': 'Autos & Vehicles',
                              '31': 'Anime/Animation',  '32': 'Action/Adventure',  '33': 'Classics',       '34': 'Comedy',                '35': 'Documentary',            '36': 'Drama', 
                              '37': 'Family',           '38': 'Foreign',           '39': 'Horror',         '40': 'Sci-Fi/Fantasy',        '41': 'Thriller',               '42': 'Shorts',
                              '43': 'Shows',            '44': 'Trailers'}
+### Plex API title update (legacy framework does not write episode titles back to DB) ###
+PLEX_TOKEN = ''
+def plex_build_file_rating_key_map(section_id):
+  """Return {file_path: rating_key} for all episodes in a library section."""
+  result = {}
+  token = Data.Load(os.path.join(PlexRoot, 'X-Plex-Token.id'))
+  token = token.strip() if token else ''
+  Log.Info(u'plex_build_file_rating_key_map: section_id={}, has_token={}'.format(section_id, bool(token)))
+  if not token or not section_id:  return result
+  try:
+    url  = 'http://127.0.0.1:32400/library/sections/{}/all?type=4&X-Plex-Token={}'.format(section_id, token)
+    xml  = etree.fromstring(urllib2.urlopen(url).read())
+    for video in xml.iter('Video'):
+      rk = video.get('ratingKey')
+      for part in video.iter('Part'):
+        fp = part.get('file')
+        if fp and rk:  result[fp] = rk
+    Log.Info(u'plex_build_file_rating_key_map: {} episodes found'.format(len(result)))
+  except Exception as e:  Log.Info(u'plex_build_file_rating_key_map error: {}'.format(e))
+  return result
+
+def plex_set_episode_title(rating_key, title):
+  token = Data.Load(os.path.join(PlexRoot, 'X-Plex-Token.id'))
+  token = token.strip() if token else ''
+  Log.Info(u'plex_set_episode_title: rating_key="{}", has_token={}'.format(rating_key, bool(token)))
+  if not token or not rating_key:  return
+  try:
+    url = 'http://127.0.0.1:32400/library/metadata/{}?title.value={}&title.locked=0&X-Plex-Token={}'.format(rating_key, urllib2.quote(title.encode('utf-8')), token)
+    req = urllib2.Request(url, data='')
+    req.get_method = lambda: 'PUT'
+    urllib2.urlopen(req)
+    Log.Info(u'plex_set_episode_title({}) = "{}"'.format(rating_key, title))
+  except Exception as e:  Log.Info(u'plex_set_episode_title error: {}'.format(e))
+
 ### Plex Library XML ###
 Log.Info(u"Library: "+PlexRoot)  #Log.Info(file)
 token_file_path = os.path.join(PlexRoot, "X-Plex-Token.id")
 if os.path.isfile(token_file_path):
   Log.Info(u"'X-Plex-Token.id' file present")
   token_file=Data.Load(token_file_path)
-  if token_file:  PLEX_LIBRARY_URL += "?X-Plex-Token=" + token_file.strip()
+  if token_file:
+    PLEX_TOKEN = token_file.strip()
+    PLEX_LIBRARY_URL += "?X-Plex-Token=" + PLEX_TOKEN
   #Log.Info(PLEX_LIBRARY_URL) ##security risk if posting logs with token displayed
 try:
   library_xml = etree.fromstring(urllib2.urlopen(PLEX_LIBRARY_URL).read())
   for library in library_xml.iterchildren('Directory'):
     for path in library.iterchildren('Location'):
       PLEX_LIBRARY[path.get("path")] = library.get("title")
+      PLEX_SECTION_FOR_PATH[path.get("path")] = library.get("key")
       Log.Info(u"{} = {}".format(path.get("path"), library.get("title")))
 except Exception as e:  Log.Info(u"Place correct Plex token in {} file or in PLEX_LIBRARY_URL variable in Code/__init__.py to have a log per library - https://support.plex.tv/hc/en-us/articles/204059436-Finding-your-account-token-X-Plex-Token, Error: {}".format(token_file_path, str(e)))
